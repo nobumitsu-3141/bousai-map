@@ -1,0 +1,14 @@
+{
+  "name": "防災リスクマップ",
+  "short_name": "防災マップ",
+  "description": "日本の天災リスク(地震・津波・火山・気象)と飲食チェーン分布をレイヤーで重ねる地図",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1f2a36",
+  "theme_color": "#1f2a36",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
