@@ -31,8 +31,16 @@ aside h2{font-size:12px;color:#777;margin:8px 0 6px}
 .leg{font-size:11px;color:#555;margin:2px 0 8px 52px;line-height:1.5}
 .leg b{font-weight:600}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;vertical-align:-1px}
+.ck{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:8px;cursor:pointer;user-select:none;font-size:12.5px;color:#444}
+.ck:hover{background:#f5f0e6}
+.ck input{display:none}
+.ck .chip{width:12px;height:12px;border-radius:50%;background:#fff;border:2.5px solid var(--c)}
+.ck input:checked+.chip{background:var(--c)}
+#chainMode{display:flex;gap:4px;margin:2px 0 6px}
+#chainMode button{flex:1;padding:5px 0;font-size:11.5px;border:1px solid var(--line);background:#fffdf8;border-radius:8px;cursor:pointer;color:#777}
+#chainMode button.on{background:#1f2a36;color:#fff;border-color:#1f2a36}
 main{flex:1 1 auto;position:relative;min-width:0}
-canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;background:#dfe8ee}
+canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;background:#dfe8ee;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #zoomCtl{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
 #zoomCtl button{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:#fffdf8;font-size:18px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.12)}
 #card{position:absolute;left:10px;right:56px;bottom:10px;background:#fffdf8;border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.55;box-shadow:0 2px 10px rgba(0,0,0,.15);display:none;max-width:520px}
@@ -49,6 +57,7 @@ dialog .close{float:right;border:0;background:#eee;border-radius:8px;padding:6px
  aside{flex:0 0 auto;max-height:34dvh;border-right:0;border-bottom:1px solid var(--line)}
  .leg{display:none}
  header .sub{display:none}
+ #chainList{display:grid;grid-template-columns:1fr 1fr}
 }
 </style>
 </head>
@@ -66,7 +75,7 @@ dialog .close{float:right;border:0;background:#eee;border-radius:8px;padding:6px
    <button id="zIn">＋</button><button id="zOut">−</button><button id="zHome" title="全体表示">⌂</button>
   </div>
   <div id="card"><button class="x" onclick="hideCard()">×</button><div id="cardBody"></div></div>
-  <div id="note">地図をタップすると詳細を表示。円・色は概算のめやす(公式ハザードマップではない)</div>
+  <div id="note">タップで詳細・ピンチ/ダブルタップでズーム。円・色は概算のめやす(公式ハザードマップではない)</div>
  </main>
 </div>
 
@@ -83,7 +92,8 @@ dialog .close{float:right;border:0;background:#eee;border-radius:8px;padding:6px
   <li><b>海溝型地震</b>: 地震調査委員会「長期評価による地震発生確率値の更新」(2026年1月14日公表)。円は上式の1.5倍(震源域が広く深いため)。M9級連動型は破線。</li>
   <li><b>津波</b>: 南海トラフ・日本海溝/千島海溝・相模トラフ・日本海東縁部の想定に基づく沿岸の概況(帯)。到達高・浸水域は場所により大きく異なる。</li>
   <li><b>火山</b>: 気象庁の常時観測火山のうち主要なもの。円は噴石・火砕流等のめやす20km(降灰は数百kmに及びうる)。</li>
-  <li><b>飲食チェーン</b>: 都道府県別店舗数(概数)。各社公式サイト・店舗数集計サイトをWeb調査した時点値で、開閉店により変動する。<span id="chainSrcList"></span></li>
+  <li><b>都市(県庁所在地・100万都市・主要都市)</b>: 国勢調査・住民基本台帳ベースの人口概数(万人)。ラベルはズームに応じて人口の大きい順に表示。</li>
+  <li><b>飲食チェーン</b>: 都道府県別店舗数(概数)。各社公式サイト・店舗数集計サイトをWeb調査した時点値で、開閉店により変動する。<b>ドット表示は「1ドット=1店舗」を県内の都市規模に応じて機械的に散布した分布イメージであり、実際の店舗位置ではない</b>(正確な店舗数は県タップで表示)。<span id="chainSrcList"></span></li>
   <li><b>台風・高潮 / 豪雨・土砂 / 豪雪</b>: 都道府県別の3段階概況。台風=気象庁の台風接近数の気候値、豪雨・土砂=土砂災害警戒区域数と豪雨頻度、豪雪=豪雪地帯対策特別措置法の指定地域を参考に整理。同一県内でも地域差が大きい。</li>
  </ul>
  <h3>注意</h3>
@@ -171,13 +181,67 @@ const RATE_RAIN={"広島":3,"島根":3,"山口":3,"長野":3,"兵庫":3,"和歌�
 "岡山":2,"愛媛":2,"徳島":2,"京都":2,"奈良":2,"滋賀":2,"新潟":2,"富山":2,"石川":2,"福井":2,"山梨":2,"群馬":2,"栃木":2,"神奈川":2,"東京":2,"岩手":2,"宮城":2,"秋田":2,"山形":2,"福島":2,"北海道":2,"三重":2,"愛知":2,"大阪":2,"鳥取":2,"沖縄":2,"茨城":2};
 const RATE_SNOW={"北海道":3,"青森":3,"秋田":3,"山形":3,"新潟":3,"富山":3,"石川":3,"福井":3,"長野":3,"岐阜":3,
 "岩手":2,"福島":2,"群馬":2,"滋賀":2,"京都":2,"兵庫":2,"鳥取":2,"島根":2,"宮城":2};
-const PREF_CAPS=[["札幌",43.06,141.35,"北海道"],["青森",40.82,140.74,"青森県"],["盛岡",39.70,141.15,"岩手県"],["仙台",38.27,140.87,"宮城県"],["秋田",39.72,140.10,"秋田県"],["山形",38.24,140.36,"山形県"],["福島",37.75,140.47,"福島県"],["水戸",36.37,140.47,"茨城県"],["宇都宮",36.57,139.88,"栃木県"],["前橋",36.39,139.06,"群馬県"],["さいたま",35.86,139.65,"埼玉県"],["千葉",35.61,140.12,"千葉県"],["東京",35.69,139.69,"東京都(新宿)"],["横浜",35.44,139.64,"神奈川県"],["新潟",37.90,139.02,"新潟県"],["富山",36.70,137.21,"富山県"],["金沢",36.56,136.66,"石川県"],["福井",36.07,136.22,"福井県"],["甲府",35.66,138.57,"山梨県"],["長野",36.65,138.18,"長野県"],["岐阜",35.39,136.72,"岐阜県"],["静岡",34.98,138.38,"静岡県"],["名古屋",35.18,136.91,"愛知県"],["津",34.73,136.51,"三重県"],["大津",35.00,135.87,"滋賀県"],["京都",35.01,135.77,"京都府"],["大阪",34.69,135.50,"大阪府"],["神戸",34.69,135.20,"兵庫県"],["奈良",34.69,135.80,"奈良県"],["和歌山",34.23,135.17,"和歌山県"],["鳥取",35.50,134.24,"鳥取県"],["松江",35.47,133.05,"島根県"],["岡山",34.66,133.92,"岡山県"],["広島",34.40,132.46,"広島県"],["山口",34.19,131.47,"山口県"],["徳島",34.07,134.55,"徳島県"],["高松",34.34,134.04,"香川県"],["松山",33.84,132.77,"愛媛県"],["高知",33.56,133.53,"高知県"],["福岡",33.59,130.40,"福岡県"],["佐賀",33.25,130.30,"佐賀県"],["長崎",32.74,129.87,"長崎県"],["熊本",32.80,130.71,"熊本県"],["大分",33.24,131.61,"大分県"],["宮崎",31.91,131.42,"宮崎県"],["鹿児島",31.56,130.56,"鹿児島県"],["那覇",26.21,127.68,"沖縄県"]];
-// 人口100万人以上(概数・万人)
-const MILLION=[["東京23区",35.68,139.77,971],["横浜",35.44,139.64,377],["大阪",34.69,135.50,279],["名古屋",35.18,136.91,233],["札幌",43.06,141.35,196],["福岡",33.59,130.40,166],["川崎",35.53,139.70,155],["神戸",34.69,135.20,149],["京都",35.01,135.77,144],["さいたま",35.86,139.65,135],["広島",34.40,132.46,119],["仙台",38.27,140.87,110]];
+// 県庁所在地 [名称,lat,lon,都道府県,人口(万・概数)]
+const PREF_CAPS=[["札幌",43.06,141.35,"北海道",196],["青森",40.82,140.74,"青森県",27],["盛岡",39.70,141.15,"岩手県",28],["仙台",38.27,140.87,"宮城県",110],["秋田",39.72,140.10,"秋田県",30],["山形",38.24,140.36,"山形県",24],["福島",37.75,140.47,"福島県",27],["水戸",36.37,140.47,"茨城県",27],["宇都宮",36.57,139.88,"栃木県",51],["前橋",36.39,139.06,"群馬県",33],["さいたま",35.86,139.65,"埼玉県",135],["千葉",35.61,140.12,"千葉県",98],["東京",35.69,139.69,"東京都(新宿)",971],["横浜",35.44,139.64,"神奈川県",377],["新潟",37.90,139.02,"新潟県",77],["富山",36.70,137.21,"富山県",41],["金沢",36.56,136.66,"石川県",46],["福井",36.07,136.22,"福井県",26],["甲府",35.66,138.57,"山梨県",19],["長野",36.65,138.18,"長野県",37],["岐阜",35.39,136.72,"岐阜県",40],["静岡",34.98,138.38,"静岡県",68],["名古屋",35.18,136.91,"愛知県",233],["津",34.73,136.51,"三重県",27],["大津",35.00,135.87,"滋賀県",34],["京都",35.01,135.77,"京都府",144],["大阪",34.69,135.50,"大阪府",279],["神戸",34.69,135.20,"兵庫県",149],["奈良",34.69,135.80,"奈良県",35],["和歌山",34.23,135.17,"和歌山県",35],["鳥取",35.50,134.24,"鳥取県",18],["松江",35.47,133.05,"島根県",20],["岡山",34.66,133.92,"岡山県",72],["広島",34.40,132.46,"広島県",119],["山口",34.19,131.47,"山口県",19],["徳島",34.07,134.55,"徳島県",25],["高松",34.34,134.04,"香川県",41],["松山",33.84,132.77,"愛媛県",50],["高知",33.56,133.53,"高知県",32],["福岡",33.59,130.40,"福岡県",166],["佐賀",33.25,130.30,"佐賀県",23],["長崎",32.74,129.87,"長崎県",40],["熊本",32.80,130.71,"熊本県",74],["大分",33.24,131.61,"大分県",47],["宮崎",31.91,131.42,"宮崎県",40],["鹿児島",31.56,130.56,"鹿児島県",59],["那覇",26.21,127.68,"沖縄県",31]];
+// 人口100万人以上(概数・万人) [名称,lat,lon,人口,県]
+const MILLION=[["東京23区",35.68,139.77,971,"東京"],["横浜",35.44,139.64,377,"神奈川"],["大阪",34.69,135.50,279,"大阪"],["名古屋",35.18,136.91,233,"愛知"],["札幌",43.06,141.35,196,"北海道"],["福岡",33.59,130.40,166,"福岡"],["川崎",35.53,139.70,155,"神奈川"],["神戸",34.69,135.20,149,"兵庫"],["京都",35.01,135.77,144,"京都"],["さいたま",35.86,139.65,135,"埼玉"],["広島",34.40,132.46,119,"広島"],["仙台",38.27,140.87,110,"宮城"]];
 const MILLSET=new Set(MILLION.map(m=>m[0]).concat(["東京"]));
+// 主要都市(県庁所在地・100万都市以外) [名称,lat,lon,人口(万・概数),県] ズームに応じて人口順に表示
+const CITIES=[
+["旭川",43.77,142.36,32,"北海道"],["函館",41.77,140.73,24,"北海道"],["苫小牧",42.63,141.61,17,"北海道"],["帯広",42.92,143.20,16,"北海道"],["釧路",42.98,144.38,16,"北海道"],["北見",43.80,143.89,11,"北海道"],["小樽",43.19,141.00,11,"北海道"],
+["八戸",40.51,141.49,21,"青森"],["弘前",40.60,140.46,16,"青森"],
+["奥州",39.14,141.14,11,"岩手"],["一関",38.93,141.13,11,"岩手"],["花巻",39.39,141.12,9,"岩手"],
+["石巻",38.43,141.30,13,"宮城"],["大崎",38.58,140.96,12,"宮城"],["名取",38.17,140.89,8,"宮城"],
+["横手",39.31,140.55,8,"秋田"],["大仙",39.45,140.48,7,"秋田"],
+["鶴岡",38.73,139.83,11,"山形"],["酒田",38.91,139.84,9,"山形"],["米沢",37.92,140.12,7,"山形"],
+["郡山",37.40,140.36,32,"福島"],["いわき",37.05,140.89,31,"福島"],["会津若松",37.49,139.93,11,"福島"],
+["つくば",36.08,140.08,26,"茨城"],["日立",36.60,140.65,16,"茨城"],["ひたちなか",36.40,140.53,15,"茨城"],["土浦",36.07,140.20,14,"茨城"],
+["小山",36.31,139.80,17,"栃木"],["栃木",36.38,139.73,15,"栃木"],["足利",36.34,139.45,14,"栃木"],
+["高崎",36.32,139.00,37,"群馬"],["太田",36.29,139.38,22,"群馬"],["伊勢崎",36.31,139.20,21,"群馬"],
+["川口",35.81,139.72,60,"埼玉"],["川越",35.93,139.49,35,"埼玉"],["越谷",35.89,139.79,34,"埼玉"],["所沢",35.80,139.47,34,"埼玉"],["草加",35.83,139.81,25,"埼玉"],["春日部",35.98,139.75,23,"埼玉"],["上尾",35.98,139.59,23,"埼玉"],["熊谷",36.15,139.39,19,"埼玉"],
+["船橋",35.69,139.98,65,"千葉"],["松戸",35.79,139.90,50,"千葉"],["市川",35.72,139.93,49,"千葉"],["柏",35.87,139.97,43,"千葉"],["市原",35.50,140.12,27,"千葉"],["八千代",35.72,140.10,21,"千葉"],["佐倉",35.72,140.22,17,"千葉"],["木更津",35.38,139.92,14,"千葉"],
+["八王子",35.67,139.32,58,"東京"],["町田",35.55,139.45,43,"東京"],["府中",35.67,139.48,26,"東京"],["調布",35.65,139.54,24,"東京"],["立川",35.71,139.41,19,"東京"],["武蔵野",35.72,139.57,15,"東京"],
+["相模原",35.57,139.37,73,"神奈川"],["藤沢",35.34,139.49,45,"神奈川"],["横須賀",35.28,139.67,37,"神奈川"],["平塚",35.34,139.35,26,"神奈川"],["茅ヶ崎",35.33,139.40,25,"神奈川"],["大和",35.49,139.46,24,"神奈川"],["厚木",35.44,139.36,22,"神奈川"],["小田原",35.26,139.15,19,"神奈川"],
+["長岡",37.45,138.85,26,"新潟"],["上越",37.15,138.24,18,"新潟"],["三条",37.64,138.96,9,"新潟"],
+["高岡",36.75,137.03,16,"富山"],["射水",36.72,137.10,9,"富山"],
+["白山",36.51,136.57,11,"石川"],["小松",36.40,136.45,11,"石川"],
+["坂井",36.17,136.23,9,"福井"],["越前",35.90,136.17,8,"福井"],
+["甲斐",35.66,138.52,8,"山梨"],["富士吉田",35.49,138.81,5,"山梨"],
+["松本",36.24,137.97,24,"長野"],["上田",36.40,138.25,15,"長野"],["佐久",36.25,138.48,10,"長野"],["飯田",35.51,137.82,10,"長野"],
+["大垣",35.36,136.61,16,"岐阜"],["各務原",35.40,136.85,14,"岐阜"],["多治見",35.33,137.13,11,"岐阜"],["高山",36.14,137.25,8,"岐阜"],
+["浜松",34.71,137.73,78,"静岡"],["富士",35.16,138.68,24,"静岡"],["沼津",35.10,138.86,19,"静岡"],["磐田",34.72,137.85,17,"静岡"],["藤枝",34.87,138.26,14,"静岡"],["富士宮",35.22,138.62,13,"静岡"],
+["豊田",35.08,137.16,42,"愛知"],["岡崎",34.95,137.17,39,"愛知"],["一宮",35.30,136.80,38,"愛知"],["豊橋",34.77,137.39,37,"愛知"],["春日井",35.25,136.97,31,"愛知"],["安城",34.96,137.08,19,"愛知"],["豊川",34.83,137.38,18,"愛知"],["刈谷",34.99,137.00,15,"愛知"],
+["四日市",34.97,136.62,31,"三重"],["鈴鹿",34.88,136.58,20,"三重"],["松阪",34.58,136.53,16,"三重"],["桑名",35.06,136.68,14,"三重"],
+["草津",35.02,135.96,15,"滋賀"],["長浜",35.38,136.28,11,"滋賀"],["東近江",35.11,136.20,11,"滋賀"],["彦根",35.27,136.26,11,"滋賀"],
+["宇治",34.89,135.80,18,"京都"],["亀岡",35.01,135.58,9,"京都"],["舞鶴",35.47,135.39,8,"京都"],
+["堺",34.57,135.48,82,"大阪"],["東大阪",34.68,135.60,48,"大阪"],["豊中",34.78,135.47,41,"大阪"],["枚方",34.81,135.65,40,"大阪"],["吹田",34.76,135.52,38,"大阪"],["高槻",34.85,135.62,35,"大阪"],["茨木",34.82,135.57,29,"大阪"],["八尾",34.63,135.60,26,"大阪"],["寝屋川",34.77,135.63,23,"大阪"],["岸和田",34.46,135.37,19,"大阪"],
+["姫路",34.82,134.69,53,"兵庫"],["西宮",34.74,135.34,48,"兵庫"],["尼崎",34.73,135.41,46,"兵庫"],["明石",34.64,134.99,30,"兵庫"],["加古川",34.76,134.84,26,"兵庫"],["宝塚",34.80,135.36,23,"兵庫"],
+["橿原",34.51,135.79,12,"奈良"],["生駒",34.69,135.70,12,"奈良"],
+["田辺",33.73,135.38,7,"和歌山"],["橋本",34.32,135.60,6,"和歌山"],
+["米子",35.43,133.33,15,"鳥取"],["倉吉",35.43,133.82,4,"鳥取"],
+["出雲",35.37,132.75,17,"島根"],["浜田",34.90,132.08,5,"島根"],
+["倉敷",34.60,133.77,47,"岡山"],["津山",35.07,134.00,10,"岡山"],["総社",34.67,133.75,7,"岡山"],
+["福山",34.49,133.36,46,"広島"],["呉",34.25,132.57,20,"広島"],["東広島",34.43,132.74,20,"広島"],["尾道",34.41,133.19,13,"広島"],["廿日市",34.35,132.33,11,"広島"],
+["下関",33.96,130.94,25,"山口"],["宇部",33.95,131.25,16,"山口"],["周南",34.06,131.81,14,"山口"],["岩国",34.17,132.22,13,"山口"],
+["阿南",33.92,134.66,7,"徳島"],["鳴門",34.17,134.61,5,"徳島"],
+["丸亀",34.29,133.80,11,"香川"],["三豊",34.18,133.72,6,"香川"],
+["今治",34.07,133.00,15,"愛媛"],["新居浜",33.96,133.28,11,"愛媛"],["西条",33.92,133.18,10,"愛媛"],
+["南国",33.58,133.64,5,"高知"],["四万十",33.00,132.93,3,"高知"],
+["北九州",33.88,130.87,92,"福岡"],["久留米",33.32,130.51,30,"福岡"],["飯塚",33.65,130.69,12,"福岡"],["大牟田",33.03,130.45,11,"福岡"],["春日",33.53,130.47,11,"福岡"],["糸島",33.56,130.20,10,"福岡"],
+["唐津",33.45,129.97,11,"佐賀"],["鳥栖",33.38,130.51,7,"佐賀"],
+["佐世保",33.18,129.72,23,"長崎"],["諫早",32.84,130.05,13,"長崎"],["大村",32.90,129.96,10,"長崎"],
+["八代",32.51,130.60,12,"熊本"],["天草",32.46,130.19,7,"熊本"],["玉名",32.93,130.56,6,"熊本"],
+["別府",33.28,131.49,11,"大分"],["中津",33.60,131.19,8,"大分"],
+["都城",31.72,131.06,16,"宮崎"],["延岡",32.58,131.66,11,"宮崎"],
+["霧島",31.74,130.76,12,"鹿児島"],["鹿屋",31.38,130.85,10,"鹿児島"],["薩摩川内",31.81,130.30,9,"鹿児島"],
+["沖縄",26.33,127.80,14,"沖縄"],["うるま",26.38,127.86,13,"沖縄"],["浦添",26.25,127.72,12,"沖縄"],["宜野湾",26.28,127.76,10,"沖縄"],["名護",26.59,127.98,6,"沖縄"],["石垣",24.34,124.16,5,"沖縄"],["宮古島",24.80,125.28,5,"沖縄"]];
 // 飲食チェーン 都道府県別店舗数(検証済みデータを注入)
 const CHAINS={"はま寿司":{"北海道":27,"青森":6,"岩手":7,"宮城":14,"秋田":4,"山形":7,"福島":13,"茨城":27,"栃木":16,"群馬":10,"埼玉":41,"千葉":40,"東京":56,"神奈川":50,"新潟":12,"富山":7,"石川":7,"福井":7,"山梨":6,"長野":9,"岐阜":13,"静岡":25,"愛知":38,"三重":13,"滋賀":8,"京都":9,"大阪":28,"兵庫":16,"奈良":7,"和歌山":9,"鳥取":2,"島根":4,"岡山":7,"広島":13,"山口":9,"徳島":5,"香川":9,"愛媛":8,"高知":5,"福岡":20,"佐賀":2,"長崎":6,"熊本":12,"大分":5,"宮崎":7,"鹿児島":10,"沖縄":13},"スシロー":{"北海道":16,"青森":4,"岩手":3,"宮城":7,"秋田":3,"山形":3,"福島":6,"茨城":13,"栃木":7,"群馬":6,"埼玉":35,"千葉":42,"東京":70,"神奈川":51,"新潟":4,"富山":6,"石川":4,"福井":5,"山梨":4,"長野":10,"岐阜":13,"静岡":15,"愛知":50,"三重":12,"滋賀":11,"京都":15,"大阪":57,"兵庫":33,"奈良":9,"和歌山":5,"鳥取":3,"島根":1,"岡山":8,"広島":13,"山口":10,"徳島":7,"香川":8,"愛媛":10,"高知":5,"福岡":30,"佐賀":7,"長崎":6,"熊本":7,"大分":7,"宮崎":8,"鹿児島":5,"沖縄":8},"サイゼリヤ":{"北海道":21,"青森":7,"岩手":6,"宮城":19,"秋田":4,"山形":6,"福島":15,"茨城":26,"栃木":16,"群馬":9,"埼玉":94,"千葉":123,"東京":190,"神奈川":119,"新潟":13,"富山":6,"石川":9,"福井":4,"山梨":5,"長野":11,"岐阜":13,"静岡":25,"愛知":75,"三重":19,"滋賀":6,"京都":20,"大阪":79,"兵庫":46,"奈良":6,"和歌山":4,"鳥取":2,"島根":2,"岡山":6,"広島":12,"山口":3,"徳島":2,"香川":4,"愛媛":3,"高知":0,"福岡":26,"佐賀":2,"長崎":0,"熊本":5,"大分":2,"宮崎":0,"鹿児島":0,"沖縄":0},"マクドナルド":{"北海道":89,"青森":22,"岩手":14,"宮城":46,"秋田":15,"山形":20,"福島":34,"茨城":76,"栃木":45,"群馬":41,"埼玉":189,"千葉":160,"東京":348,"神奈川":240,"新潟":38,"富山":27,"石川":28,"福井":21,"山梨":20,"長野":36,"岐阜":46,"静岡":91,"愛知":205,"三重":44,"滋賀":38,"京都":75,"大阪":256,"兵庫":139,"奈良":36,"和歌山":22,"鳥取":10,"島根":8,"岡山":36,"広島":58,"山口":25,"徳島":17,"香川":25,"愛媛":30,"高知":12,"福岡":110,"佐賀":16,"長崎":23,"熊本":37,"大分":25,"宮崎":18,"鹿児島":25,"沖縄":40},"ミスタードーナツ":{"北海道":54,"青森":12,"岩手":9,"宮城":20,"秋田":7,"山形":7,"福島":14,"茨城":16,"栃木":13,"群馬":15,"埼玉":61,"千葉":48,"東京":101,"神奈川":67,"新潟":19,"富山":8,"石川":15,"福井":11,"山梨":5,"長野":12,"岐阜":16,"静岡":27,"愛知":67,"三重":16,"滋賀":11,"京都":19,"大阪":105,"兵庫":59,"奈良":12,"和歌山":9,"鳥取":5,"島根":4,"岡山":11,"広島":23,"山口":10,"徳島":5,"香川":8,"愛媛":9,"高知":4,"福岡":58,"佐賀":6,"長崎":13,"熊本":18,"大分":7,"宮崎":9,"鹿児島":10,"沖縄":21},"バーミヤン":{"北海道":4,"青森":2,"岩手":1,"宮城":1,"秋田":1,"山形":1,"福島":1,"茨城":14,"栃木":7,"群馬":9,"埼玉":40,"千葉":46,"東京":92,"神奈川":69,"新潟":3,"富山":2,"石川":0,"福井":0,"山梨":11,"長野":0,"岐阜":3,"静岡":8,"愛知":13,"三重":4,"滋賀":1,"京都":3,"大阪":7,"兵庫":4,"奈良":2,"和歌山":2,"鳥取":0,"島根":0,"岡山":1,"広島":3,"山口":0,"徳島":1,"香川":2,"愛媛":0,"高知":0,"福岡":4,"佐賀":0,"長崎":0,"熊本":0,"大分":0,"宮崎":0,"鹿児島":0,"沖縄":0},"餃子の王将":{"北海道":18,"青森":0,"岩手":0,"宮城":4,"秋田":0,"山形":0,"福島":0,"茨城":6,"栃木":3,"群馬":11,"埼玉":36,"千葉":28,"東京":67,"神奈川":41,"新潟":3,"富山":4,"石川":8,"福井":6,"山梨":1,"長野":4,"岐阜":17,"静岡":7,"愛知":43,"三重":19,"滋賀":21,"京都":46,"大阪":155,"兵庫":73,"奈良":17,"和歌山":12,"鳥取":3,"島根":0,"岡山":9,"広島":10,"山口":4,"徳島":5,"香川":7,"愛媛":2,"高知":2,"福岡":21,"佐賀":2,"長崎":4,"熊本":5,"大分":1,"宮崎":0,"鹿児島":0,"沖縄":0},"すき家":{"北海道":68,"青森":18,"岩手":22,"宮城":29,"秋田":16,"山形":19,"福島":32,"茨城":61,"栃木":38,"群馬":40,"埼玉":115,"千葉":101,"東京":241,"神奈川":165,"新潟":37,"富山":19,"石川":19,"福井":11,"山梨":19,"長野":38,"岐阜":32,"静岡":65,"愛知":128,"三重":34,"滋賀":19,"京都":43,"大阪":135,"兵庫":73,"奈良":15,"和歌山":12,"鳥取":8,"島根":12,"岡山":26,"広島":38,"山口":18,"徳島":12,"香川":18,"愛媛":21,"高知":12,"福岡":53,"佐賀":11,"長崎":12,"熊本":22,"大分":12,"宮崎":15,"鹿児島":24,"沖縄":26},"丸亀製麺":{"北海道":28,"青森":7,"岩手":6,"宮城":17,"秋田":4,"山形":9,"福島":12,"茨城":23,"栃木":14,"群馬":13,"埼玉":63,"千葉":44,"東京":95,"神奈川":56,"新潟":16,"富山":11,"石川":9,"福井":7,"山梨":6,"長野":14,"岐阜":16,"静岡":27,"愛知":69,"三重":13,"滋賀":13,"京都":20,"大阪":55,"兵庫":48,"奈良":12,"和歌山":7,"鳥取":2,"島根":5,"岡山":17,"広島":26,"山口":12,"徳島":6,"香川":1,"愛媛":8,"高知":5,"福岡":19,"佐賀":3,"長崎":8,"熊本":9,"大分":6,"宮崎":6,"鹿児島":10,"沖縄":9},"サブウェイ":{"北海道":10,"青森":1,"岩手":0,"宮城":3,"秋田":1,"山形":2,"福島":0,"茨城":4,"栃木":3,"群馬":1,"埼玉":7,"千葉":15,"東京":68,"神奈川":21,"新潟":0,"富山":3,"石川":2,"福井":0,"山梨":1,"長野":5,"岐阜":0,"静岡":2,"愛知":17,"三重":1,"滋賀":2,"京都":2,"大阪":21,"兵庫":9,"奈良":2,"和歌山":1,"鳥取":0,"島根":0,"岡山":2,"広島":5,"山口":2,"徳島":0,"香川":0,"愛媛":0,"高知":1,"福岡":9,"佐賀":1,"長崎":1,"熊本":2,"大分":2,"宮崎":1,"鹿児島":2,"沖縄":3},"びっくりドンキー":{"北海道":42,"青森":6,"岩手":8,"宮城":11,"秋田":4,"山形":3,"福島":8,"茨城":7,"栃木":3,"群馬":4,"埼玉":16,"千葉":17,"東京":26,"神奈川":11,"新潟":3,"富山":1,"石川":3,"福井":1,"山梨":1,"長野":2,"岐阜":4,"静岡":10,"愛知":30,"三重":8,"滋賀":5,"京都":8,"大阪":42,"兵庫":14,"奈良":5,"和歌山":3,"鳥取":0,"島根":0,"岡山":3,"広島":6,"山口":2,"徳島":2,"香川":2,"愛媛":2,"高知":1,"福岡":13,"佐賀":1,"長崎":3,"熊本":2,"大分":1,"宮崎":1,"鹿児島":2,"沖縄":4}};
 const CHAIN_META={"はま寿司":{"asof":"2026-04","src":"https://japan-wanderer.com/hama-sushi-store-count-prefecture/","total":669},"スシロー":{"asof":"2026-04","src":"https://japan-wanderer.com/sushiro-store-count-prefecture/","total":662},"サイゼリヤ":{"asof":"2026-04","src":"https://japan-wanderer.com/saizeriya-store-count-prefecture/","total":1065},"マクドナルド":{"asof":"2025-04","src":"https://todo-ran.com/t/kiji/10097","total":2976},"ミスタードーナツ":{"asof":"2026-07","src":"https://www.misterdonut.jp/shop_data/","total":1076},"バーミヤン":{"asof":"2026-04","src":"https://japan-wanderer.com/bamiyan-store-count-prefecture/","total":362},"餃子の王将":{"asof":"2026-04","src":"https://japan-wanderer.com/ohsho-store-count-prefecture/","total":725},"すき家":{"asof":"2026-04","src":"https://47story.jp/chain/sukiya","total":2004},"丸亀製麺":{"asof":"2026-04","src":"https://47story.jp/chain/marugame","total":886},"サブウェイ":{"asof":"2026-07","src":"https://www.subway.co.jp/shop/search/","total":235},"びっくりドンキー":{"asof":"2026-04","src":"https://japan-wanderer.com/bikkuri-donkey-store-count-prefecture/","total":351}};
+
+// チェーンの表示順と色(隣接色の色覚多様性分離を検証済みの並び)
+const CHAIN_ORDER=["マクドナルド","スシロー","バーミヤン","はま寿司","餃子の王将","サイゼリヤ","すき家","ミスタードーナツ","丸亀製麺","サブウェイ","びっくりドンキー"];
+const CHAIN_COLOR={"マクドナルド":"#c62828","スシロー":"#3949ab","バーミヤン":"#d84315","はま寿司":"#008fa6","餃子の王将":"#ad1457","サイゼリヤ":"#827717","すき家":"#8e24aa","ミスタードーナツ":"#a0522d","丸亀製麺":"#1e88e5","サブウェイ":"#1b7f2e","びっくりドンキー":"#0057b2"};
 
 /* ================= レイヤー定義 ================= */
 const LAYERS=[
@@ -195,8 +259,9 @@ const LAYERS=[
   leg:'県の色: 濃=警戒区域多い/豪雨頻発 淡=少なめ'},
  {id:"snow",name:"豪雪(県別概況)",c:"#3f51b5",on:false,
   leg:'県の色: 濃=豪雪地帯(特別指定含む) 淡=少なめ'},
- {id:"caps",name:"県庁所在地",c:"#555",on:false,leg:""},
- {id:"million",name:"100万都市",c:"#111",on:true,leg:"人口100万人以上の12市区(タップで人口)"}
+ {id:"caps",name:"県庁所在地",c:"#555",on:true,leg:""},
+ {id:"million",name:"100万都市",c:"#111",on:true,leg:"人口100万人以上の12市区(タップで人口)"},
+ {id:"cities",name:"主要都市",c:"#607d8b",on:true,leg:"各県の主な市(タップで人口)。ズームするほど表示が増える"}
 ];
 const CHORO={typhoon:RATE_TYPHOON,rain:RATE_RAIN,snow:RATE_SNOW};
 
@@ -218,36 +283,112 @@ function fitHome(){
 const S=(x,y)=>[(x-view.cx)*view.s+cv.clientWidth/2, cv.clientHeight/2-(y-view.cy)*view.s];
 const invS=(px,py)=>[(px-cv.clientWidth/2)/view.s+view.cx, view.cy-(py-cv.clientHeight/2)/view.s];
 
-/* ================= 描画 ================= */
+/* ================= 事前計算(描画高速化・ドット散布用) ================= */
 const prefShort=n=>n.replace(/(都|府|県)$/,"");
+const PREF_KM=PREF_GEO.map(pf=>{
+ const rings=pf.r.map(ring=>ring.map(pt=>P(pt[0],pt[1])));
+ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+ for(const ring of rings)for(const [x,y] of ring){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+ return {n:pf.n,s:prefShort(pf.n),r:rings,x0,y0,x1,y1};
+});
+// 都市アンカー(チェーン店ドットの散布重み: 人口比例)
+const CITY_IX={};
+function addAnchor(pref,lat,lon,pop){const [x,y]=P(lon,lat);(CITY_IX[pref]??=[]).push({x,y,pop:Math.max(pop||2,2)})}
+for(const [n,lat,lon,pop,pref] of CITIES)addAnchor(pref,lat,lon,pop);
+for(const [n,lat,lon,pref,pop] of PREF_CAPS)addAnchor(prefShort(pref.replace(/\(.*\)$/,"")),lat,lon,pop);
+// 県庁所在地と重複する10市と東京23区(=新宿の県庁エントリで計上済み)は除外し二重計上を防ぐ
+const CAPNAMES=new Set(PREF_CAPS.map(c=>c[0]));
+for(const [n,lat,lon,pop,pref] of MILLION)if(!CAPNAMES.has(n)&&n!=="東京23区")addAnchor(pref,lat,lon,pop);
+// 乱数(シード固定: 表示のたびに同じ散布になる)
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function strSeed(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+const gauss=r=>{let u=0;while(!u)u=r();return Math.sqrt(-2*Math.log(u))*Math.cos(6.28318*r())};
+function pipKm(x,y,ring){
+ let ins=false;
+ for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+  const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+  if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)ins=!ins;
+ }
+ return ins;
+}
+const inPrefKm=(pk,x,y)=>x>=pk.x0&&x<=pk.x1&&y>=pk.y0&&y<=pk.y1&&pk.r.some(ring=>pipKm(x,y,ring));
+// チェーン店ドット生成: 1ドット=1店舗。都市人口で重み付けした概念的散布(実店舗位置ではない)
+const CHAIN_DOTS={};
+function genDots(chain){
+ const out=[];
+ for(const pk of PREF_KM){
+  const n=(CHAINS[chain]||{})[pk.s]||0; if(!n)continue;
+  const rnd=mulberry32(strSeed(chain+"|"+pk.s));
+  const anc=CITY_IX[pk.s]||[]; const wsum=anc.reduce((a,c)=>a+c.pop,0);
+  for(let i=0;i<n;i++){
+   let ok=false;
+   for(let t=0;t<30&&!ok;t++){
+    let x,y;
+    if(wsum&&rnd()<0.85){
+     let r=rnd()*wsum,a=anc[anc.length-1];
+     for(const c of anc){if((r-=c.pop)<=0){a=c;break}}
+     const sg=Math.min(2.2+Math.sqrt(a.pop)*0.5,8);
+     const th=rnd()*6.28318, rr=Math.abs(gauss(rnd))*sg;
+     x=a.x+Math.cos(th)*rr; y=a.y+Math.sin(th)*rr;
+    }else{
+     x=pk.x0+rnd()*(pk.x1-pk.x0); y=pk.y0+rnd()*(pk.y1-pk.y0);
+    }
+    if(inPrefKm(pk,x,y)){out.push(x,y);ok=true}
+   }
+   if(!ok&&anc.length)out.push(anc[0].x,anc[0].y);
+  }
+ }
+ return out;
+}
+
+/* ================= 描画 ================= */
 const choroColor=(base,lv)=>base+(lv===3?"cc":lv===2?"77":"2e");
 function faultColor(p){return p>=10?"#b2182b":p>=5?"#ef8a3c":"#f6c445"}
 function chainColor(c){const a=c>=150?0.9:c>=50?0.62:c>=15?0.42:c>=5?0.26:0.14;return `rgba(27,127,46,${a})`}
 function on(id){return LAYERS.find(l=>l.id===id).on}
+const chainOnList=()=>CHAIN_ORDER.filter(c=>chainOn.has(c));
+const chainTotal=s=>chainOnList().reduce((a,ch)=>a+((CHAINS[ch]||{})[s]||0),0);
 
 function draw(){
  const w=cv.clientWidth,h=cv.clientHeight;
  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
  ctx.clearRect(0,0,w,h);
  // 都道府県
- for(const pf of PREF_GEO){
-  const short=prefShort(pf.n);
+ const choroChain=chainMode==="pref"&&chainOn.size>0;
+ for(const pk of PREF_KM){
   ctx.beginPath();
-  for(const ring of pf.r){
-   ring.forEach((pt,i)=>{const [x,y]=P(pt[0],pt[1]);const [px,py]=S(x,y);i?ctx.lineTo(px,py):ctx.moveTo(px,py)});
+  for(const ring of pk.r){
+   for(let i=0;i<ring.length;i++){
+    const px=(ring[i][0]-view.cx)*view.s+w/2, py=h/2-(ring[i][1]-view.cy)*view.s;
+    i?ctx.lineTo(px,py):ctx.moveTo(px,py);
+   }
    ctx.closePath();
   }
   ctx.fillStyle="#efe9dc"; ctx.fill();
   for(const id of ["typhoon","rain","snow"]){
    if(!on(id))continue;
-   const lv=CHORO[id][short]||1;
+   const lv=CHORO[id][pk.s]||1;
    ctx.fillStyle=choroColor(LAYERS.find(l=>l.id===id).c,lv); ctx.fill();
   }
-  if(typeof chainSel!=="undefined"&&chainSel.value){
-   const cnt=(CHAINS[chainSel.value]||{})[short];
+  if(choroChain){
+   const cnt=chainTotal(pk.s);
    if(cnt>0){ctx.fillStyle=chainColor(cnt);ctx.fill();}
   }
   ctx.strokeStyle="#b4aa96"; ctx.lineWidth=0.7; ctx.stroke();
+ }
+ // チェーン店ドット(1ドット=1店舗・分布イメージ)
+ if(chainMode==="dot"&&chainOn.size){
+  const r=Math.max(1.7,Math.min(3.2,1.3+view.s*0.35));
+  for(const ch of chainOnList()){
+   const pts=CHAIN_DOTS[ch]??=genDots(ch);
+   ctx.beginPath();
+   for(let i=0;i<pts.length;i+=2){
+    const sx=(pts[i]-view.cx)*view.s+w/2, sy=h/2-(pts[i+1]-view.cy)*view.s;
+    if(sx<-6||sx>w+6||sy<-6||sy>h+6)continue;
+    ctx.moveTo(sx+r,sy); ctx.arc(sx,sy,r,0,7);
+   }
+   ctx.globalAlpha=0.82; ctx.fillStyle=CHAIN_COLOR[ch]; ctx.fill(); ctx.globalAlpha=1;
+  }
  }
  // 津波
  if(on("tsunami")) for(const [name,lv,pts] of TSUNAMI){
@@ -295,24 +436,56 @@ function draw(){
   ctx.strokeStyle="#7b1fa2";ctx.lineWidth=1;ctx.stroke();
   tri(px,py,6,"#9c4dcc","#4a148c");
  }
- // 県庁所在地
- if(on("caps")) for(const [name,lat,lon] of PREF_CAPS){
-  if(on("million")&&MILLSET.has(name))continue;
-  const [x,y]=P(lon,lat);const [px,py]=S(x,y);
-  ctx.fillStyle="#444";ctx.beginPath();ctx.arc(px,py,2.6,0,7);ctx.fill();
-  ctx.font="500 10px 'Hiragino Sans',sans-serif";
-  ctx.strokeStyle="rgba(255,255,255,.85)";ctx.lineWidth=3;ctx.strokeText(name,px+4,py-3);
-  ctx.fillStyle="#333";ctx.fillText(name,px+4,py-3);
+ // 都市(県庁所在地・100万都市・主要都市を統合し、人口順にラベル衝突を回避して描画)
+ drawCities(w,h);
+ drawScaleBar(w,h);
+}
+// ズームに応じたラベル表示の下限人口(万)
+function cityMinPop(){return view.s<0.45?60:view.s<0.9?28:view.s<1.8?12:view.s<3.5?5:0}
+function cityCandidates(){
+ const cand=[],seen=new Set();
+ if(on("million"))for(const [n,lat,lon,pop] of MILLION){cand.push({n,lat,lon,pop,t:2});seen.add(n)}
+ if(on("caps"))for(const [n,lat,lon,pref,pop] of PREF_CAPS){
+  if(seen.has(n)||(on("million")&&MILLSET.has(n)))continue;
+  cand.push({n,lat,lon,pop,t:1});seen.add(n);
  }
- // 100万都市
- if(on("million")) for(const [name,lat,lon,pop] of MILLION){
-  const [x,y]=P(lon,lat);const [px,py]=S(x,y);
-  ctx.fillStyle="#111";ctx.beginPath();ctx.arc(px,py,4.2,0,7);ctx.fill();
-  ctx.strokeStyle="#fff";ctx.lineWidth=1.2;ctx.stroke();
-  ctx.font="700 11.5px 'Hiragino Sans',sans-serif";
-  ctx.strokeStyle="rgba(255,255,255,.9)";ctx.lineWidth=3.5;ctx.strokeText(name,px+6,py-4);
-  ctx.fillStyle="#000";ctx.fillText(name,px+6,py-4);
+ if(on("cities"))for(const [n,lat,lon,pop] of CITIES){if(seen.has(n))continue;cand.push({n,lat,lon,pop,t:0});seen.add(n)}
+ return cand.sort((a,b)=>(b.t-a.t)||(b.pop-a.pop));
+}
+function drawCities(w,h){
+ const minPop=cityMinPop(), placed=[];
+ const free=(x,y,ww,hh)=>{for(const r of placed)if(x<r[0]+r[2]&&r[0]<x+ww&&y<r[1]+r[3]&&r[1]<y+hh)return false;return true};
+ for(const c of cityCandidates()){
+  const boost=c.t===1?1.6:1;
+  if(c.pop*boost<minPop*0.5&&c.t===0)continue;   // 小都市はズームするまで非表示
+  const [x,y]=P(c.lon,c.lat);const [px,py]=S(x,y);
+  if(px<-30||px>w+30||py<-30||py>h+30)continue;
+  const r=c.t===2?4.2:c.t===1?3:2.4;
+  ctx.beginPath();ctx.arc(px,py,r,0,7);
+  ctx.fillStyle=c.t===2?"#111":c.t===1?"#333":"#546e7a";ctx.fill();
+  if(c.t===2){ctx.strokeStyle="#fff";ctx.lineWidth=1.2;ctx.stroke()}
+  if(c.pop*boost<minPop)continue;                // ラベルはさらに上位のみ
+  ctx.font=c.t===2?"700 11.5px 'Hiragino Sans',sans-serif":c.t===1?"500 10.5px 'Hiragino Sans',sans-serif":"400 10px 'Hiragino Sans',sans-serif";
+  const tw=ctx.measureText(c.n).width;
+  const lx=px+r+2, ly=py-3;
+  if(!free(lx-1,ly-11,tw+4,13))continue;
+  placed.push([lx-1,ly-11,tw+4,13]);
+  ctx.strokeStyle="rgba(255,255,255,.88)";ctx.lineWidth=3.2;ctx.strokeText(c.n,lx,ly);
+  ctx.fillStyle=c.t===2?"#000":c.t===1?"#222":"#37474f";ctx.fillText(c.n,lx,ly);
  }
+}
+function drawScaleBar(w,h){
+ // 投影は全国一律cos37°のため、表示中の緯度で東西実距離に補正する(南北はほぼ正確)
+ const lat=37+view.cy/KY;
+ const corr=Math.min(1.5,Math.max(0.5,Math.cos(lat*Math.PI/180)/Math.cos(37*Math.PI/180)));
+ const target=76/(view.s*corr);
+ const nice=[1,2,5,10,20,50,100,200,500,1000].find(v=>v>=target)||1000;
+ const px=nice*corr*view.s, x0=12, y0=16;
+ ctx.strokeStyle="#555";ctx.lineWidth=1.5;ctx.beginPath();
+ ctx.moveTo(x0,y0-4);ctx.lineTo(x0,y0);ctx.lineTo(x0+px,y0);ctx.lineTo(x0+px,y0-4);ctx.stroke();
+ ctx.font="500 10px 'Hiragino Sans',sans-serif";
+ ctx.strokeStyle="rgba(255,255,255,.85)";ctx.lineWidth=3;ctx.strokeText(nice+"km",x0+px/2-10,y0-5);
+ ctx.fillStyle="#444";ctx.fillText(nice+"km",x0+px/2-10,y0-5);
 }
 function tri(px,py,s,fill,edge){
  ctx.beginPath();ctx.moveTo(px,py-s);ctx.lineTo(px-s*0.9,py+s*0.7);ctx.lineTo(px+s*0.9,py+s*0.7);
@@ -323,14 +496,6 @@ function tri(px,py,s,fill,edge){
 const card=document.getElementById("card"),cardBody=document.getElementById("cardBody");
 function showCard(html){cardBody.innerHTML=html;card.style.display="block"}
 function hideCard(){card.style.display="none"}
-function pip(x,y,ring){ // point in polygon (km座標)
- let ins=false;
- for(let i=0,j=ring.length-1;i<ring.length;j=i++){
-  const [xi,yi]=P(ring[i][0],ring[i][1]),[xj,yj]=P(ring[j][0],ring[j][1]);
-  if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)ins=!ins;
- }
- return ins;
-}
 function hit(px,py){
  const near=(lat,lon,th)=>{const [x,y]=P(lon,lat);const [qx,qy]=S(x,y);return Math.hypot(qx-px,qy-py)<th};
  if(on("volcano")) for(const [n,lat,lon] of VOLCANO) if(near(lat,lon,13))
@@ -353,30 +518,60 @@ function hit(px,py){
  }
  if(on("subd")) for(const [name,m,prob,cls,pts] of SUBD) for(const [lat,lon] of pts) if(near(lat,lon,13))
   return showCard(`<div class="t">🌊 ${name}</div>想定 M${m}程度 / 30年以内発生確率 <b>${prob}</b>。円は強い揺れ(震度5強〜6弱)のめやす。沿岸では津波にも警戒。`);
- if(on("tsunami")) for(const [name,lv,pts,memo] of TSUNAMI) for(const q of pts) if(near(q[0],q[1],14))
-  return showCard(`<div class="t">🌊 ${name}</div>沿岸の津波リスク: <b>${lv===3?"特に高い":"高い"}</b>。${memo}。`);
+ if(on("tsunami")) for(const [name,lv,pts,memo] of TSUNAMI){
+  // 描画された帯(折れ線)への線分距離で判定(頂点だけだとズーム時に帯の途中が反応しない)
+  const th=Math.max(12,2.5*view.s+8);
+  let hitT=false;
+  for(let k=0;k<pts.length-1&&!hitT;k++){
+   const [ax,ay]=S(...P(pts[k][1],pts[k][0])),[bx,by]=S(...P(pts[k+1][1],pts[k+1][0]));
+   const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy;
+   const t=L2?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/L2)):0;
+   if(Math.hypot(px-(ax+t*dx),py-(ay+t*dy))<th)hitT=true;
+  }
+  if(hitT)return showCard(`<div class="t">🌊 ${name}</div>沿岸の津波リスク: <b>${lv===3?"特に高い":"高い"}</b>。${memo}。`);
+ }
  if(on("million")) for(const [n,lat,lon,pop] of MILLION) if(near(lat,lon,12))
   return showCard(`<div class="t">🏙 ${n}</div>人口 約${pop}万人${n==="東京23区"?"(特別区部)":"(政令指定都市)"}。`);
- if(on("caps")) for(const [n,lat,lon,pref] of PREF_CAPS) if(near(lat,lon,10))
-  return showCard(`<div class="t">🏛 ${n}</div>${pref}の県庁所在地${pref.includes("都")?"(都庁)":pref.includes("道")?"(道庁)":pref.includes("府")?"(府庁)":""}。`);
+ if(on("caps")) for(const [n,lat,lon,pref,pop] of PREF_CAPS){
+  if(on("million")&&MILLSET.has(n))continue; // 描画側(cityCandidates)と同じ除外
+  if(near(lat,lon,10))
+  return showCard(`<div class="t">🏛 ${n}</div>${pref}の県庁所在地${pref.includes("都")?"(都庁)":pref.includes("道")?"(道庁)":pref.includes("府")?"(府庁)":""}。人口 約${pop}万人。`);
+ }
+ if(on("cities")){
+  const minPop=cityMinPop();
+  for(const [n,lat,lon,pop,pref] of CITIES) if(pop>=minPop*0.5&&near(lat,lon,10))
+   return showCard(`<div class="t">🏘 ${n}</div>${pref}の主要都市。人口 約${pop}万人(概数)。`);
+ }
  // 都道府県(県別レイヤーかチェーンがオンのとき)
- if(["typhoon","rain","snow"].some(on)||chainSel.value){
+ if(["typhoon","rain","snow"].some(on)||chainOn.size){
   const [x,y]=invS(px,py);
-  for(const pf of PREF_GEO) for(const ring of pf.r) if(pip(x,y,ring)){
-   const s=prefShort(pf.n),lv=v=>["","低め","中","高"][v||1];
+  for(const pk of PREF_KM) if(inPrefKm(pk,x,y)){
+   const s=pk.s,lv=v=>["","低め","中","高"][v||1];
    let chainLine="";
-   if(chainSel.value){
-    const m=CHAIN_META[chainSel.value]||{};
-    const c=(CHAINS[chainSel.value]||{})[s];
-    chainLine=`🍽 ${chainSel.value}: <b>${c==null?"データなし":c+"店"}</b>(${m.asof||"時点不明"}・概数)<br>`;
+   if(chainOn.size){
+    chainLine=chainOnList().map(ch=>{
+     const c=(CHAINS[ch]||{})[s];
+     return `<span class="dot" style="background:${CHAIN_COLOR[ch]}"></span>${ch}: <b>${c==null?"?":c+"店"}</b>`;
+    }).join(" ")+`<span style="color:#777">(概数)</span><br>`;
    }
-   return showCard(`<div class="t">📍 ${pf.n}</div>${chainLine}台風・高潮: <b>${lv(RATE_TYPHOON[s])}</b> / 豪雨・土砂: <b>${lv(RATE_RAIN[s])}</b> / 豪雪: <b>${lv(RATE_SNOW[s])}</b><br><span style="color:#777">県内でも地域差が大きい。住所単位はハザードマップで。</span>`);
+   return showCard(`<div class="t">📍 ${pk.n}</div>${chainLine}台風・高潮: <b>${lv(RATE_TYPHOON[s])}</b> / 豪雨・土砂: <b>${lv(RATE_RAIN[s])}</b> / 豪雪: <b>${lv(RATE_SNOW[s])}</b><br><span style="color:#777">県内でも地域差が大きい。住所単位はハザードマップで。</span>`);
   }
  }
  hideCard();
 }
 
-/* ================= UI(トグル) ================= */
+/* ================= UI(トグル)・状態保存 ================= */
+const chainOn=new Set(); let chainMode="dot";
+// K=保存時に存在したレイヤーid。将来追加されるレイヤーが既存ユーザーで勝手にオフにならないよう、K にある id だけ復元する
+function saveState(){try{localStorage.setItem("bousaiMap",JSON.stringify({L:LAYERS.filter(l=>l.on).map(l=>l.id),K:LAYERS.map(l=>l.id),C:[...chainOn],M:chainMode}))}catch(_){}}
+function loadState(){try{
+ const s=JSON.parse(localStorage.getItem("bousaiMap")||"null"); if(!s)return;
+ const known=new Set(Array.isArray(s.K)?s.K:Array.isArray(s.L)?s.L:[]);
+ if(Array.isArray(s.L))for(const l of LAYERS)if(known.has(l.id))l.on=s.L.includes(l.id);
+ if(Array.isArray(s.C))for(const c of s.C)if(CHAINS[c])chainOn.add(c);
+ if(s.M==="pref"||s.M==="dot")chainMode=s.M;
+}catch(_){}}
+loadState();
 const panel=document.getElementById("panel");
 panel.insertAdjacentHTML("beforeend","<h2>レイヤー(タップでオン/オフ)</h2>");
 for(const l of LAYERS){
@@ -385,28 +580,43 @@ for(const l of LAYERS){
    <input type="checkbox" id="tg_${l.id}" ${l.on?"checked":""}><span class="sw" style="--c:${l.c}"></span></label>
    ${l.leg?`<div class="leg" id="leg_${l.id}" style="display:${l.on?"block":"none"}">${l.leg}</div>`:""}`);
 }
+panel.insertAdjacentHTML("beforeend",`<h2>飲食チェーン(複数選択可)</h2>
+<div id="chainMode"><button data-m="dot">ドット分布</button><button data-m="pref">県別の濃淡</button></div>
+<div id="chainList"></div>
+<div class="leg" id="chainLeg" style="display:none;margin-left:8px;margin-top:2px"></div>`);
+const chainList=document.getElementById("chainList");
+for(const ch of CHAIN_ORDER){
+ if(!CHAINS[ch])continue;
+ chainList.insertAdjacentHTML("beforeend",
+  `<label class="ck" style="--c:${CHAIN_COLOR[ch]}"><input type="checkbox" data-ch="${ch}" ${chainOn.has(ch)?"checked":""}><span class="chip"></span>${ch}</label>`);
+}
+function updateChainMode(){for(const b of document.querySelectorAll("#chainMode button"))b.classList.toggle("on",b.dataset.m===chainMode)}
+function updateChainLeg(){
+ const leg=document.getElementById("chainLeg");
+ if(!chainOn.size){leg.style.display="none";return}
+ leg.style.display="block";
+ const asof=chainOnList().map(ch=>`${ch}(${(CHAIN_META[ch]||{}).asof||"?"})`).join("、");
+ leg.innerHTML=chainMode==="dot"
+  ?`1ドット=1店舗。<b>位置は都市規模に応じた自動散布(分布イメージ)で実店舗の位置ではない。</b>県タップで店舗数。<br>時点: ${asof}`
+  :`選択チェーン合計の店舗数: <span class="dot" style="background:rgba(27,127,46,.9)"></span>150店〜 <span class="dot" style="background:rgba(27,127,46,.62)"></span>50〜 <span class="dot" style="background:rgba(27,127,46,.42)"></span>15〜 <span class="dot" style="background:rgba(27,127,46,.26)"></span>5〜 <span class="dot" style="background:rgba(27,127,46,.14)"></span>1〜 0店=色なし<br>県タップで店舗数。時点: ${asof}`;
+}
+updateChainMode(); updateChainLeg();
+document.getElementById("chainMode").addEventListener("click",e=>{
+ const m=e.target.dataset&&e.target.dataset.m; if(!m||m===chainMode)return;
+ chainMode=m; updateChainMode(); updateChainLeg(); hideCard(); saveState(); draw();
+});
 panel.addEventListener("change",e=>{
+ if(e.target.dataset&&e.target.dataset.ch){
+  const ch=e.target.dataset.ch;
+  if(e.target.checked)chainOn.add(ch);else chainOn.delete(ch);
+  updateChainLeg(); hideCard(); saveState(); draw(); return;
+ }
  const id=e.target.id.replace("tg_","");
  const l=LAYERS.find(x=>x.id===id); if(!l)return;
  l.on=e.target.checked;
  const leg=document.getElementById("leg_"+id); if(leg)leg.style.display=l.on?"block":"none";
- hideCard(); draw();
+ hideCard(); saveState(); draw();
 });
-panel.insertAdjacentHTML("beforeend",`<h2>飲食チェーン(県別店舗数)</h2>
-<select id="chainSel" style="width:100%;padding:8px;border-radius:10px;border:1px solid var(--line);font-size:13px;background:#fffdf8">
-<option value="">表示しない</option></select>
-<div class="leg" id="chainLeg" style="display:none;margin-left:8px;margin-top:6px"></div>`);
-const chainSel=document.getElementById("chainSel");
-for(const c of Object.keys(CHAINS)) chainSel.insertAdjacentHTML("beforeend",`<option>${c}</option>`);
-chainSel.onchange=()=>{
- const leg=document.getElementById("chainLeg");
- if(chainSel.value){
-  const m=CHAIN_META[chainSel.value]||{};
-  leg.style.display="block";
-  leg.innerHTML=`<span class="dot" style="background:rgba(27,127,46,.9)"></span>150店〜 <span class="dot" style="background:rgba(27,127,46,.62)"></span>50〜 <span class="dot" style="background:rgba(27,127,46,.42)"></span>15〜 <span class="dot" style="background:rgba(27,127,46,.26)"></span>5〜 <span class="dot" style="background:rgba(27,127,46,.14)"></span>1〜 0店=色なし<br>県タップで店舗数(${m.asof||"時点不明"}・概数)`;
- } else leg.style.display="none";
- hideCard(); draw();
-};
 document.getElementById("btnInfo").onclick=()=>infoDlg.showModal();
 
 /* ================= 操作(ズーム・パン・タップ) ================= */
@@ -420,32 +630,81 @@ function zoom(f,px,py){
  userView=true;
  px=px??cv.clientWidth/2; py=py??cv.clientHeight/2;
  const [wx,wy]=invS(px,py);
- view.s*=f; view.s=Math.min(Math.max(view.s,0.15),12);
+ view.s=Math.min(Math.max(view.s*f,0.12),26);
  const [nx,ny]=invS(px,py);
  view.cx+=wx-nx; view.cy+=wy-ny; draw();
 }
 document.getElementById("zIn").onclick=()=>zoom(1.5);
 document.getElementById("zOut").onclick=()=>zoom(1/1.5);
 document.getElementById("zHome").onclick=()=>{userView=false;fitHome();draw()};
-cv.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY<0?1.18:1/1.18,e.offsetX,e.offsetY)},{passive:false});
-let drag=null,moved=false,pinch=null;
-cv.addEventListener("pointerdown",e=>{drag=[e.clientX,e.clientY];moved=false;cv.setPointerCapture(e.pointerId)});
-cv.addEventListener("pointermove",e=>{
- if(!drag||pinch)return;
- const dx=e.clientX-drag[0],dy=e.clientY-drag[1];
- if(Math.hypot(dx,dy)>3){moved=true;userView=true}
- view.cx-=dx/view.s; view.cy+=dy/view.s; drag=[e.clientX,e.clientY]; draw();
-});
-cv.addEventListener("pointerup",e=>{
- if(!moved){const r=cv.getBoundingClientRect();hit(e.clientX-r.left,e.clientY-r.top)}
- drag=null;
-});
-cv.addEventListener("touchstart",e=>{if(e.touches.length===2){pinch=dist(e);}},{passive:true});
-cv.addEventListener("touchmove",e=>{
- if(e.touches.length===2&&pinch){e.preventDefault();const d=dist(e);zoom(d/pinch);pinch=d;}
+// ホイール/トラックパッド(トラックパッドのピンチは ctrlKey 付きの wheel で届く)
+cv.addEventListener("wheel",e=>{
+ e.preventDefault();
+ const f=Math.min(2,Math.max(0.5,Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.002))));
+ zoom(f,e.offsetX,e.offsetY);
 },{passive:false});
-cv.addEventListener("touchend",()=>{pinch=null});
-const dist=e=>Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+// ポインタ操作: 1本=パン / 2本=ピンチ(2本指の中点を基準・感度は減衰付き)
+const ptrs=new Map();
+let moved=false,pinD=0,downX=0,downY=0,lastTapT=0,lastTapX=0,lastTapY=0;
+const mid=()=>{const v=[...ptrs.values()];return v.length<2?null:{x:(v[0][0]+v[1][0])/2,y:(v[0][1]+v[1][1])/2,d:Math.hypot(v[0][0]-v[1][0],v[0][1]-v[1][1])}};
+cv.addEventListener("pointerdown",e=>{
+ if(e.pointerType==="mouse"&&e.button!==0)return; // 右/中ボタンは地図操作にしない(メニューでpointerupが来ず残留するため)
+ cv.setPointerCapture(e.pointerId);
+ ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+ if(ptrs.size===1){downX=e.clientX;downY=e.clientY;moved=false}
+ else{const g=mid();pinD=g.d;moved=true;lastTapT=0}
+});
+cv.addEventListener("pointermove",e=>{
+ if(!ptrs.has(e.pointerId))return;
+ const prev=ptrs.get(e.pointerId), g0=mid();
+ ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+ if(ptrs.size===1){
+  if(!moved&&Math.hypot(e.clientX-downX,e.clientY-downY)<=4)return; // タップのブレは無視
+  moved=true; lastTapT=0; userView=true;
+  view.cx-=(e.clientX-prev[0])/view.s; view.cy+=(e.clientY-prev[1])/view.s; draw();
+ }else if(ptrs.size>=2&&g0){ // 3本目以降が触れても先頭2本でピンチ継続
+  const g=mid(), r=cv.getBoundingClientRect();
+  userView=true;
+  view.cx-=(g.x-g0.x)/view.s; view.cy+=(g.y-g0.y)/view.s; // 中点の移動でパン
+  if(pinD>0&&g.d>0)zoom(Math.pow(g.d/pinD,0.8),g.x-r.left,g.y-r.top); // 指の間隔比^0.8=減衰
+  else draw();
+  pinD=g.d;
+ }
+});
+function ptrEnd(e){
+ if(!ptrs.has(e.pointerId))return;
+ ptrs.delete(e.pointerId);
+ if(ptrs.size>0){const g=mid();pinD=g?g.d:0;return}
+ pinD=0;
+ if(!moved&&e.type==="pointerup"){
+  const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,now=performance.now();
+  if(now-lastTapT<320&&Math.hypot(x-lastTapX,y-lastTapY)<36){hideCard();zoom(2,x,y);lastTapT=0} // ダブルタップで拡大
+  else{lastTapT=now;lastTapX=x;lastTapY=y;hit(x,y)}
+ }
+ moved=false;
+}
+cv.addEventListener("pointerup",ptrEnd);
+cv.addEventListener("pointercancel",ptrEnd);
+cv.addEventListener("lostpointercapture",e=>{ // 予期せぬキャプチャ喪失時の残留防止
+ if(!ptrs.has(e.pointerId))return;
+ ptrs.delete(e.pointerId);
+ const g=mid(); pinD=g?g.d:0; if(!ptrs.size)moved=false;
+});
+// iOS Safariのページ拡大・ダブルタップ拡大の横取りを防ぐ(操作はポインタイベント側で処理)
+cv.addEventListener("touchstart",e=>e.preventDefault(),{passive:false});
+cv.addEventListener("touchmove",e=>e.preventDefault(),{passive:false});
+// macOS SafariのトラックパッドピンチはGestureEventでしか届かないため、scale比でズームする
+// (iOSの2本指タッチでもgesture*は発火するが、その間はptrsにポインタが居るので無視される)
+let gestScale=1;
+cv.addEventListener("gesturestart",e=>{e.preventDefault();gestScale=e.scale||1});
+cv.addEventListener("gesturechange",e=>{
+ e.preventDefault();
+ if(ptrs.size)return;
+ const sc=e.scale||1, r=cv.getBoundingClientRect();
+ if(gestScale>0)zoom(sc/gestScale,(e.clientX||0)-r.left,(e.clientY||0)-r.top);
+ gestScale=sc;
+});
+cv.addEventListener("gestureend",e=>{e.preventDefault();gestScale=1});
 
 const _csl=document.getElementById("chainSrcList");
 if(_csl)_csl.textContent=" 収載: "+Object.entries(CHAIN_META).map(([k,v])=>`${k}(${v.asof||"?"})`).join("、");

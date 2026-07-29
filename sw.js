@@ -1,4 +1,4 @@
-const CACHE = 'bousai-map-v2';
+const CACHE = 'bousai-map-v4';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -16,7 +16,19 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request))
-  );
+  const isPage = e.request.mode === 'navigate' || e.request.url.replace(/[?#].*$/, '').endsWith('/index.html');
+  if (isPage) {
+    // ページ本体はネットワーク優先: リロードすれば常に最新が出る。取得成功時はオフライン用にキャッシュも更新
+    e.respondWith(
+      fetch(e.request).then(r => {
+        if (r && r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
+        return r;
+      }).catch(() =>
+        caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('./index.html'))
+      )
+    );
+  } else {
+    // アイコン等の静的アセットはキャッシュ優先
+    e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request)));
+  }
 });
